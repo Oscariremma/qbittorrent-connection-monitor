@@ -1,4 +1,4 @@
-FROM rust:1.72-alpine as build
+FROM rust:1.90-alpine AS build
 WORKDIR /app
 
 RUN apk add pkgconfig musl-dev libressl-dev

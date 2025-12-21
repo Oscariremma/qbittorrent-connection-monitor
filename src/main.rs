@@ -16,6 +16,7 @@ struct QbitConfig {
 enum ConnectionCheckResult {
     Connected,
     Disconnected,
+    Firewalled,
     Error,
 }
 
@@ -37,11 +38,11 @@ async fn main() {
             .parse::<u64>()
             .expect("QBIT_CHECK_INTERVAL must be a number"),
         retry_interval: env::var("QBIT_RETRY_INTERVAL")
-            .unwrap_or("5".to_string())
+            .unwrap_or("10".to_string())
             .parse::<u64>()
             .expect("QBIT_RETRY_INTERVAL must be a number"),
         shutdown_wait: env::var("QBIT_SHUTDOWN_WAIT")
-            .unwrap_or("30".to_string())
+            .unwrap_or("120".to_string())
             .parse::<u64>()
             .expect("QBIT_SHUTDOWN_WAIT must be a number"),
     };
@@ -66,10 +67,12 @@ async fn main() {
     loop {
         let wait_time = match check_connection_status(&qbit).await {
             ConnectionCheckResult::Connected => config.check_interval,
-            ConnectionCheckResult::Disconnected => {
+            ConnectionCheckResult::Firewalled => {
                 shutdown_qbittorrent(&qbit).await;
                 config.shutdown_wait
             }
+            ConnectionCheckResult::Disconnected => config.retry_interval,
+            
             ConnectionCheckResult::Error => config.retry_interval,
         };
 
@@ -94,7 +97,11 @@ async fn check_connection_status(qbit: &Qbit) -> ConnectionCheckResult {
             info!("qBittorrent is connected to the internet");
             ConnectionCheckResult::Connected
         }
-        ConnectionStatus::Disconnected | ConnectionStatus::Firewalled => {
+        ConnectionStatus::Firewalled => {
+            info!("qBittorrent is firewalled and not fully connected to the internet");
+            ConnectionCheckResult::Firewalled
+        }
+        ConnectionStatus::Disconnected => {
             info!("qBittorrent is not connected to the internet");
             ConnectionCheckResult::Disconnected
         }
